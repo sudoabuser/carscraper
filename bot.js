@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const fs = require('fs');
 
 puppeteer.use(StealthPlugin());
 
@@ -25,14 +26,15 @@ puppeteer.use(StealthPlugin());
     await page.waitForTimeout(2000);
     let carModelsLinks = [];
     const weblinks = await page.evaluate(() => {
+        console.log("weblinks triggered")
         const links = Array.from(document.querySelectorAll('.category-list-wrapper > ul > li > a'));
         return links.map(link => link.href);
     });
     carModelsLinks.push(...weblinks);
 
-
-    for (let i = 0; i < carModelsLinks.length; i++) {
+    for (let i = 0; i < Math.min(carModelsLinks.length, 2); i++) {
         await page.goto(carModelsLinks[i], { waitUntil: 'networkidle2' });
+        console.log("carModelsLinks triggered")
 
         const hasChildNodes = await page.evaluate(() => {
             const wrapper = document.querySelector('.category-list-wrapper');
@@ -45,26 +47,82 @@ puppeteer.use(StealthPlugin());
             const links = Array.from(document.querySelectorAll('.category-list-wrapper > ul > li > a'));
             return links.map(link => link.href);
         });
-        carModelsLinks.push(...newLinks);
+        carModelsLinks = carModelsLinks.concat(newLinks);
+        console.log("newLinks triggered")
+        console.log(newLinks)
     }
 
-    const fs = require('fs');
-    const ExcelJS = require('exceljs');
+    let carListings = [];
+    for (let i = 0; i < carModelsLinks.length; i++) {
+        console.log("items contained: ", carListings.length)
+        console.log("carListings triggered: ", carModelsLinks[i])
+        await page.goto(carModelsLinks[i], { waitUntil: 'networkidle2' });
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Car Model Links');
+        const childLinks = await page.evaluate(() => {
+            const childNodes = document.querySelector('#main-listing > tbody:nth-child(2) > tr > td > div > a');
+            return childNodes.href;
+        });
 
-    worksheet.columns = [
-        { header: 'Car Model Links', key: 'link', width: 50 },
-    ];
+        carListings.push(childLinks);
+    }
+    const carListingsJSON = JSON.stringify(carListings);
 
-    carModelsLinks.forEach((link, index) => {
-        worksheet.addRow({ link });
-    });
+    const fetchCarInformation = async (page, url) => {
+        await page.goto(url, { waitUntil: 'networkidle2' });
 
-    await workbook.xlsx.writeFile('CarModelLinks.xlsx');
-    console.log('Excel file created with car model links.');
+        //fetch marka, seri, model
+        const carDetails = await page.evaluate(() => {
+            const detailElements = Array.from(document.querySelectorAll('div.property-item:nth-child(3), div.property-item:nth-child(4), div.property-item:nth-child(5)'));
+            let details = {};
+            detailElements.forEach((element) => {
+                const detailKey = element.querySelector('.property-key').textContent.trim();
+                const detailValue = element.querySelector('.property-value').textContent.trim();
+                details[detailKey] = detailValue;
+            });
+            return details;
+        });
 
-    console.log('car model links:', carModelsLinks);
+        let carInformation = {}; // Declare carInformation here
+
+        // Merge carDetails into carInformation
+        Object.assign(carInformation, carDetails);
+
+        await page.click('#head-tab-car-information'); // click car information tab to get car details
+
+        const additionalCarInformation = await page.evaluate(() => {
+            const infoElements = Array.from(document.querySelectorAll('div.tab-content-car-information-container:nth-child(-n+4) > ul > li'));
+            let info = {};
+            infoElements.forEach((element) => {
+                const propertyKey = element.querySelector('.property-key').textContent.trim();
+                const propertyValue = element.querySelector('.property-value').textContent.trim();
+                info[propertyKey] = propertyValue;
+            });
+            return info;
+        });
+
+        // Merge additionalCarInformation into carInformation
+        Object.assign(carInformation, additionalCarInformation);
+
+        return carInformation;
+    };
+
+    const saveCarInformation = async (carInformation) => {
+        const carInformationJSON = JSON.stringify(carInformation, null, 2); // format JSON
+
+        fs.appendFile('CarInformation.json', carInformationJSON + ',\n', (err) => {
+            if (err) {
+                console.error('Error writing file', err)
+            } else {
+                console.log('JSON object added to Dataset.json.')
+            }
+        });
+    };
+
+    for (let i = 0; i < carListings.length; i++) {
+        const carInformation = await fetchCarInformation(page, carListings[i]);
+        await saveCarInformation(carInformation);
+    }
+
+    console.log('Scraping completed.');
     await browser.close();
 })();
