@@ -4,7 +4,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 
 (async () => {
-    const browser = await puppeteer.launch({ headless: true, ignoreHTTPSErrors: true });
+    const browser = await puppeteer.launch({ headless: false, ignoreHTTPSErrors: true });
     const page = await browser.newPage();
 
     await page.goto('https://www.arabam.com', { waitUntil: 'networkidle2' });
