@@ -22,7 +22,7 @@ puppeteer.use(StealthPlugin());
     }
 
     await page.waitForTimeout(500);
-    await page.click('.category-section > li:nth-child(2) > a:nth-child(1)');
+    await page.click('.category-section > li:nth-child(2) > a:nth-child(1)');    // click 'otomobil'
     await page.waitForTimeout(2000);
     let carModelsLinks = [];
     const weblinks = await page.evaluate(() => {
@@ -32,7 +32,7 @@ puppeteer.use(StealthPlugin());
     });
     carModelsLinks.push(...weblinks);
 
-    for (let i = 0; i < Math.min(carModelsLinks.length, 2); i++) {
+    for (let i = 0; i < carModelsLinks.length; i++) {
         await page.goto(carModelsLinks[i], { waitUntil: 'networkidle2' });
         console.log("carModelsLinks triggered")
 
