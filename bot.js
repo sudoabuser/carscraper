@@ -7,6 +7,7 @@ puppeteer.use(StealthPlugin());
 (async () => {
     const browser = await puppeteer.launch({ headless: false, ignoreHTTPSErrors: true });
     const page = await browser.newPage();
+    page.setDefaultTimeout(50000);
 
     await page.goto('https://www.arabam.com', { waitUntil: 'networkidle2' });
 
